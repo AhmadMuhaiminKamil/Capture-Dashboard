@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { CaptureFilters } from "@/lib/types";
 import {
@@ -22,24 +22,70 @@ function applyFilters(q: any, f: CaptureFilters) {
   return q;
 }
 
-const TOOLTIP = {
-  background: "var(--card)", border: "1px solid var(--border)",
-  borderRadius: "8px", fontSize: 12, color: "var(--foreground)",
-  boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
-};
 const ITEM_STYLE = { color: "var(--foreground)" };
 const LABEL_STYLE = { color: "var(--muted-foreground)", fontWeight: 600 };
 
+// ponytail: easeOutQuart — smooth enough, no spring lib needed
+function useCountUp(target: number, duration = 900) {
+  const [display, setDisplay] = useState(0);
+  const raf = useRef<number>(0);
+  useEffect(() => {
+    if (target === 0) { setDisplay(0); return; }
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 4);
+      setDisplay(Math.round(ease * target));
+      if (t < 1) raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf.current);
+  }, [target, duration]);
+  return display;
+}
+
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+  // parse numeric for count-up; fallback to display string if "–"
+  const numeric = parseInt(value.replace(/\D/g, ""), 10) || 0;
+  const counted = useCountUp(numeric);
+  const display = value === "–" ? "–" : counted.toLocaleString("id-ID");
+
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card p-4 shadow-sm">
-      <div className="absolute right-3 top-3 h-8 w-8 rounded-full opacity-10" style={{ background: color }} />
+    <div
+      className="group relative overflow-hidden rounded-xl border border-border bg-card p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg cursor-default"
+      style={{ "--glow": color } as React.CSSProperties}
+    >
+      <div className="absolute top-0 left-0 h-0.5 w-full opacity-60 transition-opacity duration-300 group-hover:opacity-100"
+        style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
+      <div className="absolute right-3 top-3 h-12 w-12 rounded-full opacity-10 transition-all duration-300 group-hover:opacity-20 group-hover:scale-125"
+        style={{ background: color }} />
       <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className="mt-1.5 text-2xl font-bold tabular-nums" style={{ color }}>{value}</p>
+      <p className="mt-1.5 text-2xl font-bold tabular-nums transition-colors duration-200" style={{ color }}>{display}</p>
       {sub && <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }
+
+// Custom pie tooltip — modern card style
+function PieTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const { name, value } = payload[0];
+  const color = payload[0].payload.fill || COLORS[0];
+  const total = payload[0].payload.total;
+  const pct = total ? Math.round(value / total * 100) : 0;
+  return (
+    <div className="rounded-xl border border-white/10 px-4 py-3 shadow-2xl"
+      style={{ background: "rgba(15,23,42,0.95)", backdropFilter: "blur(12px)", minWidth: 140 }}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
+        <span className="text-xs font-semibold text-white">{name}</span>
+      </div>
+      <p className="text-2xl font-bold tabular-nums" style={{ color }}>{value.toLocaleString("id-ID")}</p>
+      <p className="text-[11px] text-slate-400 mt-0.5">{pct}% dari total</p>
+    </div>
+  );
+}
+
 
 export default function DashboardChart({ filters }: { filters: CaptureFilters }) {
   const [jenisData, setJenisData] = useState<{ name: string; value: number }[]>([]);
@@ -147,19 +193,19 @@ export default function DashboardChart({ filters }: { filters: CaptureFilters })
       {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Donut */}
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="group rounded-xl border border-border bg-card p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/20">
           <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Komposisi Jenis</p>
           {loadingStats ? skel() : jenisData.length === 0
             ? <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">Tidak ada data</div>
             : (
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
-                  <Pie data={jenisData} cx="50%" cy="50%" innerRadius={52} outerRadius={78}
+                  <Pie data={jenisData.map(d => ({ ...d, total: jenisData.reduce((a, b) => a + b.value, 0) }))}
+                    cx="50%" cy="50%" innerRadius={52} outerRadius={78}
                     dataKey="value" strokeWidth={3} stroke="var(--card)">
                     {jenisData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
                   </Pie>
-                  <Tooltip contentStyle={TOOLTIP} itemStyle={ITEM_STYLE} labelStyle={LABEL_STYLE}
-                    formatter={(v) => [fmt(Number(v)), ""]} />
+                  <Tooltip content={<PieTooltip />} />
                   <Legend iconType="circle" iconSize={8}
                     wrapperStyle={{ fontSize: 12, color: "var(--muted-foreground)" }} />
                 </PieChart>
@@ -168,7 +214,7 @@ export default function DashboardChart({ filters }: { filters: CaptureFilters })
         </div>
 
         {/* Area trend */}
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm lg:col-span-2">
+        <div className="group rounded-xl border border-border bg-card p-4 shadow-sm lg:col-span-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-primary/20">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Tren Binding</p>
             <p className="text-[10px] text-muted-foreground">{trendLabel}</p>
@@ -193,7 +239,9 @@ export default function DashboardChart({ filters }: { filters: CaptureFilters })
                     axisLine={false} tickLine={false} interval="preserveStartEnd" />
                   <YAxis tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                     axisLine={false} tickLine={false} width={30} />
-                  <Tooltip contentStyle={TOOLTIP} itemStyle={ITEM_STYLE} labelStyle={LABEL_STYLE}
+                  <Tooltip
+                    contentStyle={{ background: "rgba(15,23,42,0.95)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "10px", fontSize: 12, color: "var(--foreground)", backdropFilter: "blur(12px)" }}
+                    itemStyle={ITEM_STYLE} labelStyle={LABEL_STYLE}
                     formatter={(v, name) => [fmt(Number(v)), name === "inc" ? "INC" : "Lapsung"]} />
                   <Area type="monotone" dataKey="inc" stackId="1" stroke={COLORS[0]} strokeWidth={2}
                     fill="url(#gInc)" dot={false} activeDot={{ r: 4, fill: COLORS[0] }} />
