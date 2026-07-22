@@ -345,6 +345,7 @@ function SummarizeDetailContent({ session }: { session: any }) {
 
   const [activeDetail, setActiveDetail] = useState<BindingDetail | null>(null);
   const [allDetails, setAllDetails] = useState<BindingDetail[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
   const [page, setPage] = useState(0);
   const [modelLabels, setModelLabels] = useState<Map<string, string>>(new Map());
 
@@ -353,8 +354,8 @@ function SummarizeDetailContent({ session }: { session: any }) {
     if (session === null) return;
     let cancelled = false;
     fetchAllCaptureDetails()
-      .then((rows) => { if (!cancelled) setAllDetails(rows); })
-      .catch(() => { if (!cancelled) setAllDetails([]); });
+      .then((rows) => { if (!cancelled) { setAllDetails(rows); setLoadingData(false); } })
+      .catch(() => { if (!cancelled) { setAllDetails([]); setLoadingData(false); } });
     return () => { cancelled = true; };
   }, [session]);
 
@@ -927,6 +928,23 @@ function SummarizeDetailContent({ session }: { session: any }) {
               </div>
             </div>
 
+            {loadingData ? (
+              <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+                <div className="relative h-1 w-full bg-muted overflow-hidden">
+                  <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/60 via-primary to-primary/60"
+                    style={{ width: "40%", animation: "slideProgress 1.4s ease-in-out infinite" }} />
+                </div>
+                <div className="flex flex-col items-center justify-center gap-4 py-20">
+                  <div className="relative h-14 w-14">
+                    <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" style={{ animationDuration: "1s" }} />
+                    <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-indigo-400 animate-spin" style={{ animationDuration: "0.75s", animationDirection: "reverse" }} />
+                    <div className="absolute inset-4 rounded-full border-2 border-transparent border-t-amber-400 animate-spin" style={{ animationDuration: "0.5s" }} />
+                  </div>
+                  <p className="text-sm text-muted-foreground">Memuat data tiket...</p>
+                </div>
+                <style>{`@keyframes slideProgress{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}`}</style>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] border-collapse text-sm bg-card">
                 <thead>
@@ -1007,6 +1025,7 @@ function SummarizeDetailContent({ session }: { session: any }) {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
 
           {/* Pagination */}
