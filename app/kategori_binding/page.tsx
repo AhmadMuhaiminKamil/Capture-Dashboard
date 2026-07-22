@@ -305,13 +305,17 @@ export default function KategoriBindingPage() {
       .catch(() => { setClassifying(false); });
   }, [allDetails]);
 
-  // Helper lookup model label; fallback ke lainnya + keyword gamas
+  // Helper lookup model label; fallback ke keyword matching (Vercel/no-python)
   const getLabel = (d: BindingDetail): string => {
     const ml = modelLabels.get(d.id);
     if (ml) return ml;
-    // fallback keywords untuk gamas (model tidak coverage)
-    const alasan = d.alasanBinding.toLowerCase();
-    if (/gamas|pedestrian/.test(alasan)) return "gamasPedestrian";
+    // keyword fallback — covers when /api/classify unavailable (Vercel no Python)
+    const a = d.alasanBinding.toLowerCase();
+    if (/pindah\s*odp|odp\s*lama|odp\s*baru|reboundary|reboundery/.test(a)) return "pindahOdp";
+    if (/order\s*pda|pda\s*rusak|instalasi\s*ulang|psb|lapsung\s*psb/.test(a)) return "orderPda";
+    if (/pengamanan|percepatan|reschedule|rescheduled|kunjungan|minta\s*hari|minta\s*besok|no\s*respon/.test(a)) return "pengamananPelanggan";
+    if (/ganti\s*ont|ont\s*rusak|ont\s*lepas|pelurusan\s*onu|onu\s*id|ganti\s*gpon/.test(a)) return "gantiOnt";
+    if (/gamas|pedestrian/.test(a)) return "gamasPedestrian";
     return "lainnya";
   };
 
