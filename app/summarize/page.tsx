@@ -460,8 +460,18 @@ function SummarizeDetailContent({ session }: { session: any }) {
 
     // --- FILTER 5: MODEL LABEL atau SEARCH ---
     if (modelLabel && !isLainnya) {
-      // filter by model classification result
-      matchedDetails = matchedDetails.filter(d => modelLabels.get(d.id) === modelLabel);
+      const getKwLabel = (alasan: string): string => {
+        const a = alasan.toLowerCase();
+        if (/pindah\s*odp|odp\s*lama|odp\s*baru|reboundary|reboundery/.test(a)) return "pindahOdp";
+        if (/order\s*pda|pda\s*rusak|instalasi\s*ulang|psb|lapsung\s*psb/.test(a)) return "orderPda";
+        if (/pengamanan|percepatan|reschedule|kunjungan|minta\s*hari|minta\s*besok|no\s*respon/.test(a)) return "pengamananPelanggan";
+        if (/ganti\s*ont|ont\s*rusak|ont\s*lepas|pelurusan\s*onu|onu\s*id|ganti\s*gpon/.test(a)) return "gantiOnt";
+        if (/gamas|pedestrian/.test(a)) return "gamasPedestrian";
+        return "lainnya";
+      };
+      matchedDetails = matchedDetails.filter(d =>
+        (modelLabels.get(d.id) ?? getKwLabel(d.alasanBinding)) === modelLabel
+      );
     } else if (decodedSearch && !isLainnya) {
       matchedDetails = matchedDetails.filter(d =>
         d.alasanBinding.toLowerCase().includes(decodedSearch.toLowerCase())
