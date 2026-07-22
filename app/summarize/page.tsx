@@ -341,20 +341,43 @@ function SummarizeDetailContent({ session }: { session: any }) {
   const dateFrom = searchParams.get("dateFrom") || "";
   const dateTo = searchParams.get("dateTo") || "";
   const search = searchParams.get("search") || "";
+  const modelLabel = searchParams.get("modelLabel") || "";
 
   const [activeDetail, setActiveDetail] = useState<BindingDetail | null>(null);
   const [allDetails, setAllDetails] = useState<BindingDetail[]>([]);
   const [page, setPage] = useState(0);
+  const [modelLabels, setModelLabels] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (session === undefined) return;
     if (session === null) return;
     let cancelled = false;
-    fetchAllCaptureDetails() // Filter diterapkan di useMemo details
+    fetchAllCaptureDetails()
       .then((rows) => { if (!cancelled) setAllDetails(rows); })
       .catch(() => { if (!cancelled) setAllDetails([]); });
     return () => { cancelled = true; };
   }, [session]);
+
+  // Batch classify binding alasan when modelLabel filter is active
+  useEffect(() => {
+    if (!modelLabel || allDetails.length === 0) return;
+    const binding = allDetails.filter(d => d.kategori === "Binding");
+    if (binding.length === 0) return;
+    fetch("/api/classify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texts: binding.map(d => d.alasanBinding) }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.results) {
+          const map = new Map<string, string>();
+          binding.forEach((d, i) => map.set(d.id, data.results[i]));
+          setModelLabels(map);
+        }
+      })
+      .catch(() => {});
+  }, [allDetails, modelLabel]);
   
   // --- FILTERING DATA ---
   const details = useMemo(() => {
@@ -435,9 +458,12 @@ function SummarizeDetailContent({ session }: { session: any }) {
       });
     }
 
-    // --- FILTER 5: SEARCH (alasanBinding) - HANYA jika bukan filter LAINNYA ---
-    if (decodedSearch && !isLainnya) {
-      matchedDetails = matchedDetails.filter(d => 
+    // --- FILTER 5: MODEL LABEL atau SEARCH ---
+    if (modelLabel && !isLainnya) {
+      // filter by model classification result
+      matchedDetails = matchedDetails.filter(d => modelLabels.get(d.id) === modelLabel);
+    } else if (decodedSearch && !isLainnya) {
+      matchedDetails = matchedDetails.filter(d =>
         d.alasanBinding.toLowerCase().includes(decodedSearch.toLowerCase())
       );
     }
@@ -453,7 +479,7 @@ function SummarizeDetailContent({ session }: { session: any }) {
     }
 
     return matchedDetails;
-  }, [stoKode, type, kategori, domain, dateFrom, dateTo, search, searchParams, allDetails]);
+  }, [stoKode, type, kategori, domain, dateFrom, dateTo, search, modelLabel, modelLabels, searchParams, allDetails]);
 
   // Reset page saat filter/data berubah
   useEffect(() => { setPage(0); }, [details]);
@@ -671,6 +697,13 @@ function SummarizeDetailContent({ session }: { session: any }) {
     const stoList = stoKode.split(",").map(s => s.trim()).filter(s => s.length > 0);
     const isAll = stoKode === "all";
     const isMultiple = stoList.length > 1;
+
+    const MODEL_LABEL_DISPLAY: Record<string, string> = {
+      pindahOdp: "Pindah ODP", orderPda: "Order PDA",
+      pengamananPelanggan: "Pengamanan Pelanggan", gantiOnt: "Ganti ONT",
+      gamasPedestrian: "Gamas/Pedestrian", lainnya: "Lainnya",
+    };
+    const modelLabelDisplay = modelLabel ? (MODEL_LABEL_DISPLAY[modelLabel] ?? modelLabel) : null;
     
     const typeLabel = type ? ` ${type}` : '';
     const kategoriLabel = kategori ? ` ${kategori}` : '';
@@ -710,7 +743,7 @@ function SummarizeDetailContent({ session }: { session: any }) {
         }
       });
       
-      const titleSuffix = filterLabel ? ` (${filterLabel})` : '';
+      const titleSuffix = modelLabelDisplay ? ` (${modelLabelDisplay})` : filterLabel ? ` (${filterLabel})` : '';
       
       if (regionName) {
         title = `Region ${regionName}${titleSuffix}`;
@@ -727,18 +760,11 @@ function SummarizeDetailContent({ session }: { session: any }) {
       }
     } else {
       const stoName = stoList[0];
-      if (type && kategori) {
-        title = `${type} ${kategori} - ${stoName}`;
-        subtitle = `Menampilkan ${details.length} data ${type} ${kategori}`;
-        categoryName = kategori;
-      } else if (type) {
-        title = `${type} - ${stoName}`;
-        subtitle = `Menampilkan ${details.length} data ${type}`;
-        categoryName = type;
-      } else if (kategori) {
-        title = `${kategori} - ${stoName}`;
-        subtitle = `Menampilkan ${details.length} data ${kategori}`;
-        categoryName = kategori;
+      const labelSuffix = modelLabelDisplay ?? (type && kategori ? `${type} ${kategori}` : type || kategori || null);
+      if (labelSuffix) {
+        title = `${labelSuffix} - ${stoName}`;
+        subtitle = `Menampilkan ${details.length} data ${labelSuffix}`;
+        categoryName = labelSuffix;
       } else {
         title = `STO ${stoName}`;
         subtitle = `Menampilkan ${details.length} data`;

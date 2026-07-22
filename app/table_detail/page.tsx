@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import FilterBar from "@/components/FilterBar";
 import NavBar from "@/components/NavBar";
+import LoadingOverlay from "@/components/LoadingOverlay";
 import { fetchAllCaptureDetails } from "@/lib/captureQueries";
 import type { CaptureFilters } from "@/lib/types";
 import {
@@ -162,7 +163,7 @@ export default function TableDetailPage() {
 
   // Data real dari Supabase (4 table), diisi via fetch.
   const [allDetails, setAllDetails] = useState<BindingDetail[]>([]);
-  const [loadingData, setLoadingData] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
     if (session === undefined) return;
@@ -347,7 +348,6 @@ export default function TableDetailPage() {
     }, createEmptyCounts());
   }, [filteredData]);
 
-  if (session === undefined) return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Loading...</div>;
   if (session === null) return null;
 
   const thBase = "border border-border px-3 py-2.5 font-medium text-muted-foreground/80 whitespace-nowrap text-xs tracking-wide uppercase";
@@ -588,10 +588,33 @@ export default function TableDetailPage() {
           />
         </div>
 
-        {filteredData.length === 0 && (
+        {filteredData.length === 0 && !loadingData && (
           <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card py-16 text-center">
             <p className="text-sm font-medium text-foreground">Tidak ada data</p>
             <p className="text-xs text-muted-foreground">Coba ubah atau reset filter</p>
+          </div>
+        )}
+
+        {loadingData && (
+          <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+            {/* animated progress bar */}
+            <div className="relative h-1 w-full bg-muted overflow-hidden">
+              <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/60 via-primary to-primary/60"
+                style={{ width: "40%", animation: "slideProgress 1.4s ease-in-out infinite" }} />
+            </div>
+            <div className="flex flex-col items-center justify-center gap-4 py-20">
+              {/* orbital spinner */}
+              <div className="relative h-14 w-14">
+                <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" style={{ animationDuration: "1s" }} />
+                <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-indigo-400 animate-spin" style={{ animationDuration: "0.75s", animationDirection: "reverse" }} />
+                <div className="absolute inset-4 rounded-full border-2 border-transparent border-t-amber-400 animate-spin" style={{ animationDuration: "0.5s" }} />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-foreground">Memuat data STO...</p>
+                <p className="text-xs text-muted-foreground mt-1">Mengambil data dari semua tabel</p>
+              </div>
+            </div>
+            <style>{`@keyframes slideProgress{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}`}</style>
           </div>
         )}
 

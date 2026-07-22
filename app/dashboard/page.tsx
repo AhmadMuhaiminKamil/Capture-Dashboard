@@ -11,6 +11,7 @@ import FilterBar from "@/components/FilterBar";
 import CaptureDetailModal from "@/components/CaptureDetailModal";
 import DashboardChart from "@/components/DashboardChart";
 import NavBar from "@/components/NavBar";
+import LoadingOverlay from "@/components/LoadingOverlay";
 import { EMPTY_FILTERS, type CaptureTicket, type CaptureFilters } from "@/lib/types";
 
 /** Format Date ke string "YYYY-MM-DD" untuk value input[type=date] */
@@ -109,13 +110,7 @@ export default function DashboardPage() {
     await supabase.auth.signOut();
   }
 
-  if (session === undefined) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Loading...
-      </div>
-    );
-  }
+  if (session === undefined) return null;
   if (session === null) return null;
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -209,13 +204,21 @@ export default function DashboardPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
-                      <div className="flex items-center justify-center gap-2">
-                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                        </svg>
-                        Loading...
+                    <td colSpan={9} className="p-0">
+                      <div className="relative overflow-hidden">
+                        <div className="relative h-1 w-full bg-muted overflow-hidden">
+                          <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/60 via-primary to-primary/60"
+                            style={{ width: "40%", animation: "slideProgress 1.4s ease-in-out infinite" }} />
+                        </div>
+                        <div className="flex flex-col items-center justify-center gap-4 py-16">
+                          <div className="relative h-12 w-12">
+                            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" style={{ animationDuration: "1s" }} />
+                            <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-indigo-400 animate-spin" style={{ animationDuration: "0.75s", animationDirection: "reverse" }} />
+                            <div className="absolute inset-4 rounded-full border-2 border-transparent border-t-amber-400 animate-spin" style={{ animationDuration: "0.5s" }} />
+                          </div>
+                          <p className="text-sm text-muted-foreground">Memuat data binding...</p>
+                        </div>
+                        <style>{`@keyframes slideProgress{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}`}</style>
                       </div>
                     </td>
                   </tr>

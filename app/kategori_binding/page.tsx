@@ -4,6 +4,7 @@
 import React, { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
+import LoadingOverlay from "@/components/LoadingOverlay";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { fetchAllCaptureDetails } from "@/lib/captureQueries";
 import type { BindingDetail } from "@/lib/dummyData";
@@ -146,12 +147,12 @@ const STO_STRUCTURE: { name: string; areas: { name: string; stos: string[] }[] }
 type KategoriKey = "pindahOdp" | "orderPda" | "pengamananPelanggan" | "gantiOnt" | "gamasPedestrian" | "lainnya";
 
 const KATEGORI_COLS: { key: KategoriKey; label: string; searchKeyword: string }[] = [
-  { key: "pindahOdp",           label: "PINDAH ODP", searchKeyword: "Mintol pindah odp" },
-  { key: "orderPda",            label: "ORDER PDA", searchKeyword: "PDA" },
-  { key: "pengamananPelanggan", label: "PENGAMANAN PELANGGAN", searchKeyword: "Pengamanan Pelanggan" },
-  { key: "gantiOnt",            label: "GANTI ONT", searchKeyword: "ONT" },
-  { key: "gamasPedestrian",     label: "GAMAS/PEDESTRIAN", searchKeyword: "Gamas" },
-  { key: "lainnya",             label: "LAINNYA", searchKeyword: "Lainnya" },
+  { key: "pindahOdp",           label: "PINDAH ODP",             searchKeyword: "pindahOdp" },
+  { key: "orderPda",            label: "ORDER PDA",              searchKeyword: "orderPda" },
+  { key: "pengamananPelanggan", label: "PENGAMANAN PELANGGAN",   searchKeyword: "pengamananPelanggan" },
+  { key: "gantiOnt",            label: "GANTI ONT",              searchKeyword: "gantiOnt" },
+  { key: "gamasPedestrian",     label: "GAMAS/PEDESTRIAN",       searchKeyword: "gamasPedestrian" },
+  { key: "lainnya",             label: "LAINNYA",                searchKeyword: "Lainnya" },
 ];
 
 function sumStoRow(sto: KategoriStoRow): number {
@@ -192,17 +193,25 @@ function sumAreas(areas: AreaGroup[]) {
 }
 
 // Helper untuk build URL ke summarize - untuk kategori spesifik
+// key → model label string (matches /api/classify output before LABEL_MAP)
+const KEY_TO_MODEL: Record<string, string> = {
+  pindahOdp: "pindah_odp",
+  orderPda: "order_pda",
+  pengamananPelanggan: "pengamanan_pelanggan",
+  gantiOnt: "ganti_ont",
+  gamasPedestrian: "gamasPedestrian", // keyword fallback, model not trained on this
+  lainnya: "lainnya",
+};
+
 function buildUrl(stoKode: string, searchKeyword: string): string {
   const params = new URLSearchParams();
   params.append("sto", stoKode);
   params.append("kategori", "Binding");
-  
   if (searchKeyword === "Lainnya") {
     params.append("lainnya", "true");
   } else {
-    params.append("search", searchKeyword);
+    params.append("modelLabel", searchKeyword);
   }
-  
   return `/summarize?${params.toString()}`;
 }
 
@@ -215,9 +224,8 @@ function buildMultipleStoUrl(stoList: string[], searchKeyword: string): string {
   if (searchKeyword === "Lainnya") {
     params.append("lainnya", "true");
   } else {
-    params.append("search", searchKeyword);
+    params.append("modelLabel", searchKeyword);
   }
-  
   return `/summarize?${params.toString()}`;
 }
 
@@ -257,16 +265,74 @@ export default function KategoriBindingPage() {
 
   // Data real dari Supabase (binding_tickets)
   const [allDetails, setAllDetails] = useState<BindingDetail[]>([]);
+  const [modelLabels, setModelLabels] = useState<Map<string, string>>(new Map());
+  const [loadingData, setLoadingData] = useState(true);
+  const [classifying, setClassifying] = useState(false);
 
   useEffect(() => {
     if (session === undefined) return;
     if (session === null) return;
     let cancelled = false;
+    setLoadingData(true);
     fetchAllCaptureDetails()
-      .then((rows) => { if (!cancelled) setAllDetails(rows); })
-      .catch(() => { if (!cancelled) setAllDetails([]); });
+      .then((rows) => { if (!cancelled) { setAllDetails(rows); setLoadingData(false); } })
+      .catch(() => { if (!cancelled) { setAllDetails([]); setLoadingData(false); } });
     return () => { cancelled = true; };
   }, [session]);
+
+  // Batch classify all binding alasan texts via ONNX model
+  useEffect(() => {
+    if (allDetails.length === 0) return;
+    const bindingTexts = allDetails
+      .filter(d => d.kategori === "Binding")
+      .map(d => ({ id: d.id, text: d.alasanBinding }));
+    if (bindingTexts.length === 0) return;
+    setClassifying(true);
+    fetch("/api/classify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ texts: bindingTexts.map(x => x.text) }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.results) {
+          const map = new Map<string, string>();
+          bindingTexts.forEach((x, i) => map.set(x.id, data.results[i]));
+          setModelLabels(map);
+        }
+        setClassifying(false);
+      })
+      .catch(() => { setClassifying(false); });
+  }, [allDetails]);
+
+  // Helper lookup model label; fallback ke lainnya + keyword gamas
+  const getLabel = (d: BindingDetail): string => {
+    const ml = modelLabels.get(d.id);
+    if (ml) return ml;
+    // fallback keywords untuk gamas (model tidak coverage)
+    const alasan = d.alasanBinding.toLowerCase();
+    if (/gamas|pedestrian/.test(alasan)) return "gamasPedestrian";
+    return "lainnya";
+  };
+
+  // Build count map per STO dari allDetails + modelLabels
+  const buildStoCounts = (stoKode: string): KategoriStoRow => {
+    const binding = allDetails.filter(
+      d => d.stoBaru === stoKode && d.kategori === "Binding"
+    );
+    const counts: Record<string, number> = {
+      pindahOdp: 0, orderPda: 0, pengamananPelanggan: 0,
+      gantiOnt: 0, gamasPedestrian: 0, lainnya: 0,
+    };
+    binding.forEach(d => {
+      counts[getLabel(d)] = (counts[getLabel(d)] ?? 0) + 1;
+    });
+    return {
+      kode: stoKode,
+      ...counts,
+      total: binding.length,
+    } as KategoriStoRow;
+  };
 
   // Bangun hierarki dari STO_STRUCTURE, isi counts dari real data.
   const DUMMY_DATA = useMemo<RegionGroup[]>(() => {
@@ -274,10 +340,10 @@ export default function KategoriBindingPage() {
       name: region.name,
       areas: region.areas.map((area) => ({
         name: area.name,
-        stos: area.stos.map((kode) => generateStoData(kode, allDetails)),
+        stos: area.stos.map((kode) => buildStoCounts(kode)),
       })),
     }));
-  }, [allDetails]);
+  }, [allDetails, modelLabels]);
 
   function toggleRegion(name: string) {
     setCollapsedRegions((prev) => {
@@ -335,13 +401,6 @@ export default function KategoriBindingPage() {
     );
   }, []);
 
-  if (session === undefined) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Loading...
-      </div>
-    );
-  }
   if (session === null) return null;
 
   const thBase =
@@ -511,6 +570,30 @@ export default function KategoriBindingPage() {
       <NavBar />
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 space-y-6">
+          {(loadingData || classifying) ? (
+            <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+              <div className="relative h-1 w-full bg-muted overflow-hidden">
+                <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary/60 via-primary to-primary/60"
+                  style={{ width: "40%", animation: "slideProgress 1.4s ease-in-out infinite" }} />
+              </div>
+              <div className="flex flex-col items-center justify-center gap-4 py-20">
+                <div className="relative h-14 w-14">
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" style={{ animationDuration: "1s" }} />
+                  <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-indigo-400 animate-spin" style={{ animationDuration: "0.75s", animationDirection: "reverse" }} />
+                  <div className="absolute inset-4 rounded-full border-2 border-transparent border-t-amber-400 animate-spin" style={{ animationDuration: "0.5s" }} />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-foreground">
+                    {loadingData ? "Memuat data binding..." : "Mengklasifikasi dengan model AI..."}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {loadingData ? "Mengambil data dari database" : "Model sedang menganalisis alasan binding"}
+                  </p>
+                </div>
+              </div>
+              <style>{`@keyframes slideProgress{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}`}</style>
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead className="bg-muted/80">
@@ -671,6 +754,7 @@ export default function KategoriBindingPage() {
               </tbody>
             </table>
           </div>
+          )}
       </div>
     </div>
   );
