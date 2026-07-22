@@ -54,6 +54,7 @@ function predict(text: string, m: any): string {
     order_pda: "orderPda",
     pengamanan_pelanggan: "pengamananPelanggan",
     pindah_odp: "pindahOdp",
+    gamas_pedestrian: "gamasPedestrian",
   };
   return labelMap[rawLabel] ?? "lainnya";
 }
