@@ -861,64 +861,38 @@ function SummarizeDetailContent({ session }: { session: any }) {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card to-muted/30 shadow-sm">
-            <div 
-              className="absolute top-0 left-0 right-0 h-1" 
-              style={{ backgroundColor: headerInfo?.accentColor || "rgb(59, 130, 246)" }}
-            />
-            
-            <div className="px-6 py-6 text-center">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          <div className="relative overflow-hidden rounded-2xl shadow-lg"
+            style={{ background: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)", border: "1px solid rgba(59,130,246,0.2)" }}>
+            <div className="relative px-6 py-8 text-center">
+              <h1 className="text-2xl font-bold tracking-tight text-white">
                 {headerInfo?.title || "Detail Data"}
               </h1>
-              
-              <p className="text-sm text-muted-foreground mt-1.5">
-                {headerInfo?.subtitle}
-              </p>
-
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-4 pt-4 border-t border-border/50">
-                <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs">
-                  <span className="text-muted-foreground">STO:</span>
-                  <span className="font-medium text-foreground">{headerInfo?.stoInfo || `${stoList.length} terpilih`}</span>
-                </div>
-                
-                <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs">
-                  <span className="text-muted-foreground">Total Data:</span>
-                  <span className="font-medium text-foreground">{details.length}</span>
-                </div>
-
-                {headerInfo?.categoryName && (
-                  <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs">
-                    <span className="text-muted-foreground">Kategori:</span>
-                    <span className="font-medium text-foreground">{headerInfo.categoryName}</span>
+              <p className="text-sm text-blue-300/70 mt-1.5">{headerInfo?.subtitle}</p>
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
+                {[
+                  { label: "STO", value: `${new Set(details.map(d => d.stoBaru).filter(Boolean)).size} STO` },
+                  { label: "Total Data", value: details.length },
+                  ...(headerInfo?.categoryName ? [{ label: "Kategori", value: headerInfo.categoryName }] : []),
+                  ...(domain ? [{ label: "Domain", value: domain }] : []),
+                  ...((dateFrom || dateTo) ? [{ label: "Periode", value: `${dateFrom || "..."} — ${dateTo || "..."}` }] : []),
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs"
+                    style={{ background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)" }}>
+                    <span className="text-blue-300/70">{label}:</span>
+                    <span className="font-semibold text-white">{value}</span>
                   </div>
-                )}
-
-                {domain && (
-                  <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs">
-                    <span className="text-muted-foreground">Domain:</span>
-                    <span className="font-medium text-foreground">{domain}</span>
-                  </div>
-                )}
-                {(dateFrom || dateTo) && (
-                  <div className="flex items-center gap-1.5 rounded-lg bg-muted/50 px-3 py-1.5 text-xs">
-                    <span className="text-muted-foreground">Periode:</span>
-                    <span className="font-medium text-foreground">
-                      {dateFrom || "..."} — {dateTo || "..."}
-                    </span>
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           </div>
         </div>
 
         <div className="rounded-2xl border border-border bg-card shadow-sm">
-          <div className="overflow-hidden bg-muted/30" style={{ borderTop: `4px solid ${headerInfo?.accentColor || "rgb(59, 130, 246)"}` }}>
+          <div className="overflow-hidden bg-muted/30">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/60">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-semibold text-foreground">
-                  {stoKode === "all" ? "Semua Data" : isMultipleSto ? `Data dari ${stoList.length} STO` : `Data Tiket`}
+                  {"Data Tiket"}
                 </span>
               </div>
               <div className="flex items-center gap-2">
