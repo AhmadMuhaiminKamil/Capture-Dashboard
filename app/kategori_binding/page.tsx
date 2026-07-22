@@ -403,7 +403,7 @@ export default function KategoriBindingPage() {
       },
       { pindahOdp: 0, orderPda: 0, pengamananPelanggan: 0, gantiOnt: 0, gamasPedestrian: 0, lainnya: 0, total: 0 }
     );
-  }, []);
+  }, [DUMMY_DATA]);
 
   if (session === null) return null;
 
@@ -739,9 +739,17 @@ export default function KategoriBindingPage() {
                   </td>
                   {KATEGORI_COLS.map((col) => {
                     const val = grandTotal[col.key];
+                    if (!val) return <td key={col.key} className={tdMuted}>–</td>;
+                    const allStos = STO_STRUCTURE.flatMap(r => r.areas.flatMap(a => a.stos));
+                    const url = col.searchKeyword === "Lainnya"
+                      ? `/summarize?sto=${allStos.join(",")}&kategori=Binding&lainnya=true`
+                      : `/summarize?sto=${allStos.join(",")}&kategori=Binding&modelLabel=${col.searchKeyword}`;
                     return (
-                      <td key={col.key} className={val ? tdBase : tdMuted}>
-                        {val || "–"}
+                      <td key={col.key} className={tdClickable}>
+                        <Link href={url} className="font-bold text-white hover:text-white/80 hover:underline transition-colors block text-center"
+                          title={`Lihat ${val} data ${col.label}`}>
+                          {val}
+                        </Link>
                       </td>
                     );
                   })}
