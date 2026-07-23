@@ -219,15 +219,7 @@ STOS_LIST.forEach((kode) => {
 // Helper functions untuk filter
 export function toLocalMs(dateStr: string, endOfDay = false): number {
   const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(
-    y,
-    m - 1,
-    d,
-    endOfDay ? 23 : 0,
-    endOfDay ? 59 : 0,
-    endOfDay ? 59 : 0,
-    endOfDay ? 999 : 0
-  ).getTime();
+  return new Date(y, m - 1, d, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0).getTime();
 }
 
 export function filterDetailsData(

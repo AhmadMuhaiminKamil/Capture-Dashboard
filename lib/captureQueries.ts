@@ -40,8 +40,8 @@ function applyFilters(query: any, filters: CaptureFilters) {
   if (stoLama) query = query.ilike("sto_lama", `%${stoLama}%`);
   if (stoBaru) query = query.ilike("sto_baru", `%${stoBaru}%`);
   if (domain) query = query.ilike("domain", `%${domain}%`);
-  if (dateFrom) query = query.gte("created_at", dateFrom);
-  if (dateTo) query = query.lte("created_at", `${dateTo}T23:59:59`);
+  if (dateFrom) query = query.gte("created_at", `${dateFrom}T00:00:00+07:00`);
+  if (dateTo) query = query.lte("created_at", `${dateTo}T23:59:59+07:00`);
 
   return query;
 }
