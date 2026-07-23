@@ -43,6 +43,20 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedRow, setSelectedRow] = useState<CaptureTicket | null>(null);
   const [editRow, setEditRow] = useState<EditableFields | null>(null);
+  const [multiMode, setMultiMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmMultiDelete, setConfirmMultiDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const toggleSelect = (id: string) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allSelected = rows.length > 0 && rows.every(r => selected.has(r.id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(rows.map(r => r.id)));
+
+  const handleMultiDelete = async () => {
+    setDeleting(true);
+    await supabase.from("binding_tickets").delete().in("id", [...selected]);
+    setDeleting(false); setConfirmMultiDelete(false); setSelected(new Set()); setMultiMode(false); loadData();
+  };
 
   // ── STO options untuk autocomplete ──────────────────────────────────────────
   const [stoOptions, setStoOptions] = useState<string[]>([]);
@@ -146,44 +160,47 @@ export default function DashboardPage() {
 
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => handleExport("csv")}
-              disabled={exporting}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3.5 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <path d="M12 15V3" /><path d="M7 10l5 5 5-5" /><path d="M20 21H4" />
-              </svg>
+            <button onClick={() => handleExport("csv")} disabled={exporting}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3.5 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M12 15V3" /><path d="M7 10l5 5 5-5" /><path d="M20 21H4" /></svg>
               {exporting ? "Mengekspor..." : "Export CSV"}
             </button>
-            <button
-              onClick={() => handleExport("xlsx")}
-              disabled={exporting}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3.5 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                <path d="M12 15V3" /><path d="M7 10l5 5 5-5" /><path d="M20 21H4" />
-              </svg>
+            <button onClick={() => handleExport("xlsx")} disabled={exporting}
+              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-lg border border-border bg-background px-3.5 py-2 text-sm font-medium text-foreground shadow-sm transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M12 15V3" /><path d="M7 10l5 5 5-5" /><path d="M20 21H4" /></svg>
               {exporting ? "Mengekspor..." : "Export Excel"}
             </button>
-          </div>
-
-          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-4 py-2 shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-primary">
-              <path d="M9 17H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4" />
-              <path d="M9 21h6" /><path d="M12 17v4" />
-            </svg>
-            <span className="text-xs font-medium text-muted-foreground">Total Binding</span>
-            {loading ? (
-              <span className="inline-block h-4 w-8 animate-pulse rounded bg-muted" />
-            ) : (
-              <span className="text-sm font-semibold text-foreground">
-                {totalCount.toLocaleString("id-ID")}
-              </span>
+            {multiMode && selected.size > 0 && (
+              <button onClick={() => setConfirmMultiDelete(true)}
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3.5 py-2 text-sm font-medium text-red-400 shadow-sm transition hover:bg-red-500/20">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><polyline points="3 6 5 6 21 6"/><path strokeLinecap="round" strokeLinejoin="round" d="M19 6l-1 14H6L5 6"/></svg>
+                Hapus {selected.size} data
+              </button>
             )}
           </div>
-        </div>
 
+          <div className="flex items-center justify-between gap-2 w-full sm:w-auto">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-border bg-card px-4 py-2 shadow-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-primary">
+                <path d="M9 17H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4" />
+                <path d="M9 21h6" /><path d="M12 17v4" />
+              </svg>
+              <span className="text-xs font-medium text-muted-foreground">Total Binding</span>
+              {loading ? (
+                <span className="inline-block h-4 w-8 animate-pulse rounded bg-muted" />
+              ) : (
+                <span className="text-sm font-semibold text-foreground">
+                  {totalCount.toLocaleString("id-ID")}
+                </span>
+              )}
+            </div>
+            <button onClick={() => { setMultiMode(m => !m); setSelected(new Set()); }}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-sm font-medium shadow-sm transition ${multiMode ? "border-blue-500/40 bg-blue-500/10 text-blue-400" : "border-border bg-background text-foreground hover:bg-accent"}`}>
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 11l3 3L22 4"/><path strokeLinecap="round" strokeLinejoin="round" d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              {multiMode ? "✓ Multi Select" : "Multi Select"}
+            </button>
+          </div>
+        </div>
         {error && (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm text-destructive">
             {error}
@@ -195,6 +212,11 @@ export default function DashboardPage() {
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50 text-left">
+                  {multiMode && (
+                    <th className="px-3 py-3">
+                      <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 cursor-pointer rounded accent-primary" />
+                    </th>
+                  )}
                   <th className="px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Tanggal</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">Jenis</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground whitespace-nowrap">No Tiket</th>
@@ -235,7 +257,12 @@ export default function DashboardPage() {
                   </tr>
                 ) : (
                   rows.map((row) => (
-                    <tr key={row.id} className="border-b border-border last:border-0 transition hover:bg-muted/40">
+                    <tr key={row.id} className={`border-b border-border last:border-0 transition hover:bg-muted/40 ${selected.has(row.id) ? "bg-blue-500/5" : ""}`}>
+                      {multiMode && (
+                        <td className="px-3 py-3">
+                          <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleSelect(row.id)} className="h-4 w-4 cursor-pointer rounded accent-primary" />
+                        </td>
+                      )}
                       <td className="px-4 py-3 whitespace-nowrap text-foreground">
                         {row.created_at ? new Date(row.created_at).toLocaleString("id-ID") : "-"}
                       </td>
@@ -316,6 +343,26 @@ export default function DashboardPage() {
       )}
       {editRow && (
         <EditDeleteModal fields={editRow} onClose={() => setEditRow(null)} onSaved={() => { setEditRow(null); loadData(); }} />
+      )}
+      {confirmMultiDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setConfirmMultiDelete(false)}>
+          <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl" style={{ background: "rgba(10,15,30,0.98)", border: "1px solid rgba(239,68,68,0.3)" }} onClick={e => e.stopPropagation()}>
+            <div className="h-[2px]" style={{ background: "linear-gradient(90deg,transparent,#ef4444,transparent)" }} />
+            <div className="px-6 py-8 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="#ef4444" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+              </div>
+              <h3 className="text-base font-semibold text-white mb-2">Hapus {selected.size} Data?</h3>
+              <p className="text-xs mb-6" style={{ color: "#f87171" }}>Tindakan ini tidak dapat dibatalkan.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmMultiDelete(false)} className="flex-1 py-2.5 rounded-xl text-sm font-medium" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.08)" }}>Batal</button>
+                <button onClick={handleMultiDelete} disabled={deleting} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg,#dc2626,#9f1239)" }}>
+                  {deleting ? "Menghapus..." : "Ya, Hapus"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

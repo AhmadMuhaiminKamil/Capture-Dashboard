@@ -9,6 +9,7 @@ import type { CaptureFilters } from "@/lib/types";
 import Image from "next/image";
 import { filterDetailsData, type BindingDetail } from "@/lib/dummyData";
 import EditDeleteModal, { type EditableFields } from "@/components/EditDeleteModal";
+import { supabase } from "@/lib/supabaseClient";
 
 // ----------------------------------------------------------------------------
 // TYPES untuk DUMMY_DATA
@@ -343,6 +344,26 @@ function SummarizeDetailContent({ session }: { session: any }) {
 
   const [activeDetail, setActiveDetail] = useState<BindingDetail | null>(null);
   const [editDetail, setEditDetail] = useState<EditableFields | null>(null);
+  const [multiSel, setMultiSel] = useState<Set<string>>(new Set());
+  const [multiMode, setMultiMode] = useState(false);
+  const [confirmMulti, setConfirmMulti] = useState(false);
+  const [multiDeleting, setMultiDeleting] = useState(false);
+
+  const handleMultiDelete = async () => {
+    setMultiDeleting(true);
+    // d.id = "{table}_{uuid}" — group by table then delete
+    const byTable: Record<string, string[]> = {};
+    for (const compId of multiSel) {
+      const [table, ...rest] = compId.split("_");
+      const realId = rest.join("_");
+      (byTable[table] = byTable[table] || []).push(realId);
+    }
+    for (const [table, ids] of Object.entries(byTable)) {
+      await supabase.from(table).delete().in("id", ids);
+    }
+    setMultiDeleting(false); setConfirmMulti(false); setMultiSel(new Set()); setMultiMode(false);
+    setAllDetails([]); fetchAllCaptureDetails().then(rows => setAllDetails(rows)).catch(() => setAllDetails([]));
+  };
   const [allDetails, setAllDetails] = useState<BindingDetail[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [page, setPage] = useState(0);
@@ -827,6 +848,26 @@ function SummarizeDetailContent({ session }: { session: any }) {
       {editDetail && (
         <EditDeleteModal fields={editDetail} onClose={() => setEditDetail(null)} onSaved={() => { setEditDetail(null); setAllDetails([]); fetchAllCaptureDetails().then(rows => setAllDetails(rows)).catch(() => setAllDetails([])); }} />
       )}
+      {confirmMulti && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => setConfirmMulti(false)}>
+          <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl" style={{ background: "rgba(10,15,30,0.98)", border: "1px solid rgba(239,68,68,0.3)" }} onClick={e => e.stopPropagation()}>
+            <div className="h-[2px]" style={{ background: "linear-gradient(90deg,transparent,#ef4444,transparent)" }} />
+            <div className="px-6 py-8 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="#ef4444" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+              </div>
+              <h3 className="text-base font-semibold text-white mb-2">Hapus {multiSel.size} Data?</h3>
+              <p className="text-xs mb-6" style={{ color: "#f87171" }}>Tindakan ini tidak dapat dibatalkan.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmMulti(false)} className="flex-1 py-2.5 rounded-xl text-sm font-medium" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)", border: "1px solid rgba(255,255,255,0.08)" }}>Batal</button>
+                <button onClick={handleMultiDelete} disabled={multiDeleting} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50" style={{ background: "linear-gradient(135deg,#dc2626,#9f1239)" }}>
+                  {multiDeleting ? "Menghapus..." : "Ya, Hapus"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto max-w-7xl">
         <div className="mb-6">
@@ -896,6 +937,18 @@ function SummarizeDetailContent({ session }: { session: any }) {
                 <span className="text-sm font-semibold text-foreground">
                   {"Data Tiket"}
                 </span>
+                {/* Multi-select toggle */}
+                <button onClick={() => { setMultiMode(m => !m); setMultiSel(new Set()); }}
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition ${multiMode ? "border-blue-500/40 bg-blue-500/10 text-blue-400" : "border-border text-muted-foreground hover:bg-accent"}`}>
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 11l3 3L22 4"/><path strokeLinecap="round" strokeLinejoin="round" d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                  {multiMode ? "✓ Multi Select" : "Multi Select"}
+                </button>
+                {multiMode && multiSel.size > 0 && (
+                  <button onClick={() => setConfirmMulti(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-400 transition hover:bg-red-500/20">
+                    Hapus {multiSel.size}
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground shadow-sm">
@@ -925,6 +978,17 @@ function SummarizeDetailContent({ session }: { session: any }) {
               <table className="w-full min-w-[900px] border-collapse text-sm bg-card">
                 <thead>
                   <tr className="border-b border-border/40 bg-muted/40">
+                    {multiMode && (
+                      <th className="w-10 px-3 py-2.5 text-center">
+                        <input type="checkbox"
+                          checked={details.slice(page*100,page*100+100).length > 0 && details.slice(page*100,page*100+100).every(d => multiSel.has(d.id))}
+                          onChange={() => {
+                            const cur = details.slice(page*100,page*100+100);
+                            const allChk = cur.every(d => multiSel.has(d.id));
+                            setMultiSel(s => { const n = new Set(s); cur.forEach(d => allChk ? n.delete(d.id) : n.add(d.id)); return n; });
+                          }} className="h-4 w-4 cursor-pointer rounded accent-primary" />
+                      </th>
+                    )}
                     <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-muted-foreground/80 whitespace-nowrap tracking-wider uppercase">Tanggal</th>
                     <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-muted-foreground/80 whitespace-nowrap tracking-wider uppercase">Jenis</th>
                     <th className="px-3 py-2.5 text-left text-[10px] font-semibold text-muted-foreground/80 whitespace-nowrap tracking-wider uppercase">No Tiket</th>
@@ -943,7 +1007,12 @@ function SummarizeDetailContent({ session }: { session: any }) {
                 <tbody>
                   {details.length > 0 ? (
                     details.slice(page * 100, page * 100 + 100).map((d, idx) => (
-                      <tr key={d.id} className={`border-b border-border/30 transition-colors hover:bg-accent/40 ${idx % 2 === 0 ? "" : "bg-muted/10"}`}>
+                      <tr key={d.id} className={`border-b border-border/30 transition-colors hover:bg-accent/40 ${idx % 2 === 0 ? "" : "bg-muted/10"} ${multiSel.has(d.id) ? "bg-blue-500/5" : ""}`}>
+                        {multiMode && (
+                          <td className="w-10 px-3 py-2.5 text-center">
+                            <input type="checkbox" checked={multiSel.has(d.id)} onChange={() => setMultiSel(s => { const n = new Set(s); n.has(d.id) ? n.delete(d.id) : n.add(d.id); return n; })} className="h-4 w-4 cursor-pointer rounded accent-primary" />
+                          </td>
+                        )}
                         <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap tabular-nums text-[11px]">{d.tanggal}</td>
                         <td className="px-3 py-2.5">
                           <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={d.jenis === "Lapsung" ? { background: "rgba(52,199,140,0.15)", color: "rgb(52,199,140)" } : { background: "rgba(99,155,255,0.15)", color: "rgb(99,155,255)" }}>
