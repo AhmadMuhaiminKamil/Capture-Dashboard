@@ -54,7 +54,7 @@ export default function LoginPage() {
 
       {/* Card */}
       <div
-        className="relative w-full max-w-md rounded-3xl border border-white/10 p-10 shadow-2xl transition-all duration-500 hover:shadow-blue-500/10 hover:-translate-y-1"
+        className="relative w-full max-w-md rounded-3xl border border-white/10 p-6 sm:p-10 shadow-2xl transition-all duration-500 hover:shadow-blue-500/10 hover:-translate-y-1"
         style={{ background: "rgba(15,23,42,0.85)", backdropFilter: "blur(24px)" }}
       >
         {/* Top accent line */}

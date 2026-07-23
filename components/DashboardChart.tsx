@@ -182,7 +182,7 @@ export default function DashboardChart({ filters }: { filters: CaptureFilters })
   return (
     <div className="space-y-4">
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatCard label="Total Binding" value={loadingStats ? "–" : fmt(stats.total)} color={COLORS[0]} sub="semua tiket" />
         <StatCard label="INC" value={loadingStats ? "–" : fmt(stats.inc)} color={COLORS[1]}
           sub={loadingStats ? "" : `${stats.total ? Math.round(stats.inc / stats.total * 100) : 0}% dari total`} />

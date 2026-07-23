@@ -9,6 +9,7 @@ import { fetchCapturePage, fetchAllMatchingCapture } from "@/lib/captureQueries"
 import { exportToCSV, exportToXLSX } from "@/lib/exportUtils";
 import FilterBar from "@/components/FilterBar";
 import CaptureDetailModal from "@/components/CaptureDetailModal";
+import EditDeleteModal, { type EditableFields } from "@/components/EditDeleteModal";
 import DashboardChart from "@/components/DashboardChart";
 import NavBar from "@/components/NavBar";
 import LoadingOverlay from "@/components/LoadingOverlay";
@@ -41,6 +42,7 @@ export default function DashboardPage() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedRow, setSelectedRow] = useState<CaptureTicket | null>(null);
+  const [editRow, setEditRow] = useState<EditableFields | null>(null);
 
   // ── STO options untuk autocomplete ──────────────────────────────────────────
   const [stoOptions, setStoOptions] = useState<string[]>([]);
@@ -250,22 +252,26 @@ export default function DashboardPage() {
                       <td className="px-4 py-3 max-w-[220px] truncate text-foreground" title={row.alasan_binding}>
                         {row.alasan_binding}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <button
-                          onClick={() => setSelectedRow(row)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition hover:bg-accent"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                          Detail
-                          {row.photo_urls && row.photo_urls.length > 0 && (
-                            <span className="ml-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                              {row.photo_urls.length}
-                            </span>
-                          )}
-                        </button>
+                      <td className="px-4 py-3 whitespace-nowrap" style={{ width: "1px" }}>
+                        <div className="flex items-center justify-between gap-1.5" style={{ minWidth: "100px" }}>
+                          <button onClick={() => setSelectedRow(row)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm transition hover:bg-accent" style={{ minWidth: "70px" }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                            Detail
+                            {row.photo_urls && row.photo_urls.length > 0 && (
+                              <span className="ml-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                                {row.photo_urls.length}
+                              </span>
+                            )}
+                          </button>
+                          <button onClick={() => setEditRow({ id: row.id, table: "binding_tickets", nomor_tiket: row.nomor_tiket, no_service: row.no_service, sto_lama: row.sto_lama, sto_baru: row.sto_baru, domain: row.domain, alasan_binding: row.alasan_binding, jenis: row.jenis })}
+                            className="flex-shrink-0 inline-flex items-center justify-center rounded-lg border border-border bg-background p-1.5 text-muted-foreground shadow-sm transition hover:border-blue-500/40 hover:text-blue-400 hover:bg-blue-500/5">
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -307,6 +313,9 @@ export default function DashboardPage() {
 
       {selectedRow && (
         <CaptureDetailModal row={selectedRow} onClose={() => setSelectedRow(null)} />
+      )}
+      {editRow && (
+        <EditDeleteModal fields={editRow} onClose={() => setEditRow(null)} onSaved={() => { setEditRow(null); loadData(); }} />
       )}
     </div>
   );
