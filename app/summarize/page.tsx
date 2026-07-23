@@ -807,7 +807,7 @@ function SummarizeDetailContent({ session }: { session: any }) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 text-center">
         <p className="text-sm font-medium text-foreground">Parameter URL tidak lengkap.</p>
-        <button onClick={() => router.push("/table_detail")} className="rounded-lg border border-border bg-card px-4 py-2 text-sm text-foreground hover:bg-accent">
+        <button onClick={() => router.back()} className="rounded-lg border border-border bg-card px-4 py-2 text-sm text-foreground hover:bg-accent">
           Kembali ke halaman sebelumnya
         </button>
       </div>
@@ -832,7 +832,7 @@ function SummarizeDetailContent({ session }: { session: any }) {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <button 
-              onClick={() => router.push("/table_detail")} 
+              onClick={() => router.back()} 
               className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card shadow-sm hover:bg-accent transition-colors group"
               title="Kembali"
             >
