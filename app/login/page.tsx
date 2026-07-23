@@ -11,13 +11,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [focusedField, setFocusedField] = useState<"username" | "password" | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) router.replace("/dashboard");
+      else setChecking(false);
     });
   }, [router]);
+
+  if (checking) return null;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
