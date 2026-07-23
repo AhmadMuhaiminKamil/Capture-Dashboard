@@ -202,7 +202,7 @@ export default function DashboardChart({ filters }: { filters: CaptureFilters })
                 <PieChart>
                   <Pie data={jenisData.map(d => ({ ...d, total: jenisData.reduce((a, b) => a + b.value, 0) }))}
                     cx="50%" cy="50%" innerRadius={52} outerRadius={78}
-                    dataKey="value" strokeWidth={3} stroke="var(--card)">
+                    dataKey="value" strokeWidth={jenisData.length === 1 ? 0 : 3} stroke="var(--card)">
                     {jenisData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
                   </Pie>
                   <Tooltip content={<PieTooltip />} />
