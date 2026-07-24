@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/table_detail", label: "Table Detail" },
   { href: "/kategori_binding", label: "Kategori Binding" },
+  { href: "/storage", label: "Storage" },
 ];
 
 interface Props { right?: React.ReactNode; }
