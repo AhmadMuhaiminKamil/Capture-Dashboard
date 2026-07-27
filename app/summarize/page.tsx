@@ -779,11 +779,11 @@ function SummarizeDetailContent({ session }: { session: any }) {
       if (regionName) {
         title = `Region ${regionName}${titleSuffix}`;
         subtitle = `Menampilkan ${details.length} data dari ${stoInfo}`;
-        categoryName = regionName;
+        categoryName = modelLabelDisplay ?? (filterLabel || regionName);
       } else if (areaName) {
         title = `Area ${areaName}${titleSuffix}`;
         subtitle = `Menampilkan ${details.length} data dari ${stoInfo}`;
-        categoryName = areaName;
+        categoryName = modelLabelDisplay ?? (filterLabel || areaName);
       } else {
         title = `${stoInfo}${titleSuffix}`;
         subtitle = `Menampilkan ${details.length} data dari ${stoInfo}`;
