@@ -39,7 +39,9 @@ export async function GET() {
   return NextResponse.json({
     dbBytes, bucketBytes, totalRows, limitBytes: LIMIT_BYTES,
     pct: Math.round(pct * 10) / 10, status,
-    tables: counts, bucketFiles: files.length,
+    tables: counts,
+    bucketFiles: files.length,
+    bucketNames: files.filter(f => f.name !== ".emptyFolderPlaceholder").map((f: any) => f.name),
     fetchedAt: new Date().toISOString(),
   });
 }
