@@ -910,7 +910,6 @@ function SummarizeDetailContent({ session }: { session: any }) {
               <h1 className="text-2xl font-bold tracking-tight text-white">
                 {headerInfo?.title || "Detail Data"}
               </h1>
-              <p className="text-sm text-blue-300/70 mt-1.5">{headerInfo?.subtitle}</p>
               <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
                 {[
                   { label: "STO", value: `${new Set(details.map(d => d.stoBaru).filter(Boolean)).size} STO` },
