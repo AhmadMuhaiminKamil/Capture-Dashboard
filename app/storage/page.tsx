@@ -9,30 +9,47 @@ const BACKUP_TABLES = ["binding_tickets","gno_tickets","ognok_tickets","routing_
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-async function backupDB() {
+async function backupAll(names: string[], onProgress: (p: number) => void) {
+  const { default: JSZip } = await import("jszip");
+  const zip = new JSZip();
+  const date = new Date().toISOString().slice(0, 10);
+
+  // DB → database/backup_<date>.xlsx
   const wb = XLSX.utils.book_new();
   for (const table of BACKUP_TABLES) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, { headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` } });
     const data = await r.json();
-    if (Array.isArray(data) && data.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), table.replace("_tickets",""));
+    if (Array.isArray(data) && data.length) {
+      const ws = XLSX.utils.json_to_sheet(data);
+      // auto column width
+      const cols = Object.keys(data[0]).map(k => ({ wch: Math.max(k.length, ...data.map((r: any) => String(r[k] ?? "").length)) + 2 }));
+      ws["!cols"] = cols;
+      ws["!freeze"] = { xSplit: 0, ySplit: 1 }; // freeze header row
+      XLSX.utils.book_append_sheet(wb, ws, table.replace("_tickets", ""));
+    }
   }
-  XLSX.writeFile(wb, `backup_db_${new Date().toISOString().slice(0,10)}.xlsx`);
-}
+  zip.folder("database")!.file(`backup_${date}.xlsx`, XLSX.write(wb, { type: "array", bookType: "xlsx" }));
+  onProgress(5);
 
-async function backupBucket(names: string[], onProgress?: (p: number) => void) {
-  if (!names.length) return;
-  const { default: JSZip } = await import("jszip");
-  const zip = new JSZip(); const folder = zip.folder("CaptureBinding_Images")!;
-  const BASE = `${SUPABASE_URL}/storage/v1/object/public/CaptureBinding_Images/`;
-  let done = 0;
-  await Promise.all(names.map(async n => {
-    const r = await fetch(BASE+n); if (r.ok) folder.file(n, await r.blob());
-    onProgress?.(Math.round(++done / names.length * 90)); // 90% for fetch, 10% for zip
-  }));
-  onProgress?.(95);
-  const blob = await zip.generateAsync({ type:"blob", compression:"DEFLATE" });
-  onProgress?.(100);
-  Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `backup_bucket_${new Date().toISOString().slice(0,10)}.zip` }).click();
+  // Images → images/*.jpg
+  if (names.length) {
+    const img = zip.folder("images")!;
+    const BASE = `${SUPABASE_URL}/storage/v1/object/public/CaptureBinding_Images/`;
+    let done = 0;
+    // ponytail: batch 20 concurrent — ceiling: browser 6-conn limit per host; reduce if timeouts
+    const BATCH = 20;
+    for (let i = 0; i < names.length; i += BATCH) {
+      await Promise.all(names.slice(i, i + BATCH).map(async n => {
+        try { const r = await fetch(BASE + n); if (r.ok) img.file(n, await r.blob()); } catch {}
+        onProgress(5 + Math.round(++done / names.length * 90));
+      }));
+    }
+  }
+
+  onProgress(96);
+  const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+  onProgress(100);
+  Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `backup_${date}.zip` }).click();
 }
 
 const LIMIT = 536870912;
@@ -125,9 +142,8 @@ export default function StoragePage() {
   const session = useAuthGuard();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [backingDB, setBackingDB] = useState(false);
-  const [backingBucket, setBackingBucket] = useState(false);
-  const [bucketProgress, setBucketProgress] = useState(0);
+  const [backing, setBacking] = useState(false);
+  const [backupProgress, setBackupProgress] = useState(0);
 
   const load = () => { setLoading(true); fetch("/api/storage-stats").then(r => r.json()).then(d => { setStats(d); setLoading(false); }).catch(() => setLoading(false)); };
   useEffect(() => { if (session) { load(); const t = setInterval(load, 30000); return () => clearInterval(t); } }, [session]);
@@ -176,23 +192,16 @@ export default function StoragePage() {
             <StatCard label="Bucket" value={`${bucketMBCount.toFixed(1)} MB`} glow={glowOf(bp)} loading={loading && !stats} />
             <StatCard label="Total Rows" value={rowsCount.toLocaleString("id-ID")} loading={loading && !stats} />
             <StatCard label="Sisa Limit" value={`${remainMBCount.toFixed(1)} MB`} loading={loading && !stats} />
-            {/* Backup buttons — col-span-2 center bawah cards */}
+            {/* Backup — single zip: database/ + images/ */}
             <div className="col-span-2 flex flex-col items-center gap-2 pt-1">
-              <div className="flex gap-2">
-                <button disabled={backingDB} onClick={async()=>{setBackingDB(true);try{await backupDB()}finally{setBackingDB(false)}}}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-xs font-medium text-blue-400 shadow-sm hover:bg-blue-500/20 disabled:opacity-50 transition-all">
-                  <svg className={`h-3.5 w-3.5 ${backingDB?"animate-spin":""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m0 12l-4-4m4 4l4-4M3 21h18"/></svg>
-                  {backingDB?"Exporting...":"Backup DB"}
-                </button>
-                <button disabled={backingBucket} onClick={async()=>{setBackingBucket(true);setBucketProgress(0);try{await backupBucket(stats?.bucketNames??[],setBucketProgress)}finally{setBackingBucket(false);setBucketProgress(0)}}}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-400 shadow-sm hover:bg-amber-500/20 disabled:opacity-50 transition-all">
-                  <svg className={`h-3.5 w-3.5 ${backingBucket?"animate-spin":""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                  {backingBucket?`Zipping... ${bucketProgress}%`:"Backup Foto"}
-                </button>
-              </div>
-              {backingBucket && (
+              <button disabled={backing} onClick={async () => { setBacking(true); setBackupProgress(0); try { await backupAll(stats?.bucketNames ?? [], setBackupProgress); } finally { setBacking(false); setBackupProgress(0); } }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-5 py-2 text-xs font-medium text-primary shadow-sm hover:bg-primary/20 disabled:opacity-50 transition-all">
+                <svg className={`h-3.5 w-3.5 ${backing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m0 12l-4-4m4 4l4-4M3 21h18"/></svg>
+                {backing ? `Backup... ${backupProgress}%` : "Backup"}
+              </button>
+              {backing && (
                 <div className="w-48 rounded-full bg-muted/60 h-1.5 overflow-hidden">
-                  <div className="h-full rounded-full bg-amber-400 transition-all duration-200" style={{width:`${bucketProgress}%`}}/>
+                  <div className="h-full rounded-full bg-primary transition-all duration-200" style={{ width: `${backupProgress}%` }}/>
                 </div>
               )}
             </div>
