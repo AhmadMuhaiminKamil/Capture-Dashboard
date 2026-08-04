@@ -143,8 +143,7 @@ export async function fetchAllCaptureDetails(): Promise<BindingDetail[]> {
   for (const { name, kategori } of TABLES) {
     const rows = await fetchAllFromTable(name, {});
     for (const row of rows) {
-      const stoBaru = row.sto_baru || row.sto || "";
-      if (!stoBaru) continue; // skip row tanpa STO — tidak masuk Other
+      const stoBaru = row.sto_baru || row.sto || "OTHERS";
       const created = row.created_at ? new Date(row.created_at) : new Date();
       allDetails.push({
         id: `${name}_${row.id}`,

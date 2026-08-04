@@ -197,12 +197,12 @@ function DetailModal({ detail, onClose, isBinding }: { detail: BindingDetail; on
               </div>
               <div className="rounded-lg bg-muted/40 border border-border/50 px-4 py-3">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mb-1">STO Baru</p>
-                <p className="text-sm text-foreground">{detail.stoBaru}</p>
+                <p className="text-sm text-foreground">{detail.stoBaru === "OTHERS" ? "STO NULL" : detail.stoBaru}</p>
               </div>
             </>) : (
               <div className="rounded-lg bg-muted/40 border border-border/50 px-4 py-3">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 mb-1">STO</p>
-                <p className="text-sm text-foreground">{detail.stoBaru}</p>
+                <p className="text-sm text-foreground">{detail.stoBaru === "OTHERS" ? "STO NULL" : detail.stoBaru}</p>
               </div>
             )}
             <div className="col-span-2 rounded-lg bg-muted/40 border border-border/50 px-4 py-3">
@@ -494,9 +494,7 @@ function SummarizeDetailContent({ session }: { session: any }) {
         (modelLabels.get(d.id) ?? getKwLabel(d.alasanBinding)) === modelLabel
       );
     } else if (decodedSearch && !isLainnya) {
-      matchedDetails = matchedDetails.filter(d =>
-        d.alasanBinding.toLowerCase().includes(decodedSearch.toLowerCase())
-      );
+      matchedDetails = filterDetailsData(matchedDetails, { search: decodedSearch });
     }
 
     // --- FILTER 6: Domain, DateFrom, DateTo ---
@@ -525,7 +523,7 @@ function SummarizeDetailContent({ session }: { session: any }) {
 
   const isLainnya = searchParams.get("lainnya") === "true";
 
-  const getSearchDisplayName = (searchKeyword: string): string => {
+  const getSearchDisplayName = (searchKeyword: string): string | null => {
     const mapping: Record<string, string> = {
       "Mintol pindah odp": "PINDAH ODP",
       "PDA": "ORDER PDA",
@@ -534,7 +532,7 @@ function SummarizeDetailContent({ session }: { session: any }) {
       "Gamas": "GAMAS/PEDESTRIAN",
       "Lainnya": "LAINNYA",
     };
-    return mapping[searchKeyword] || searchKeyword;
+    return mapping[searchKeyword] ?? null;
   };
 
   const generateFileName = (extension: string) => {
@@ -1063,7 +1061,7 @@ function SummarizeDetailContent({ session }: { session: any }) {
                               ? "Tidak ada data yang tersedia"
                               : isMultipleSto 
                                 ? `Tidak ada data untuk STO: ${stoList.join(", ")}`
-                                : `Tidak ada data untuk STO ${stoKode}${type ? ` dengan tipe ${type}` : ''}${kategori ? ` dan kategori ${kategori}` : ''}${isLainnya ? ' (kategori Lainnya)' : ''}${decodedSearch && !isLainnya ? ` dengan alasan "${decodedSearch}"` : ''}`
+                                : `Tidak ada data untuk STO ${stoKode}${type ? ` dengan tipe ${type}` : ''}${kategori ? ` dan kategori ${kategori}` : ''}${isLainnya ? ' (kategori Lainnya)' : ''}${decodedSearch && !isLainnya ? ` dengan pencarian "${decodedSearch}"` : ''}`
                             }
                           </p>
                         </div>

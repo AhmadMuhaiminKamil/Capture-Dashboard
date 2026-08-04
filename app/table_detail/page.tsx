@@ -200,7 +200,7 @@ export default function TableDetailPage() {
     const unmatched = Array.from(bySto.keys()).filter((k) => !matched.has(k));
     if (unmatched.length > 0) {
       result[0].areas.push({
-        name: "Other",
+        name: "Others",
         stos: unmatched.map((k) => ({
           kode: k,
           details: bySto.get(k) || [],
@@ -565,7 +565,7 @@ export default function TableDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-muted/30 sm:pl-60">
       <NavBar right={
         <div className="flex items-center gap-1.5">
           {selectedStoList.length > 0 && (
@@ -738,7 +738,7 @@ export default function TableDetailPage() {
                                     return (
                                       <tr key={`${area.name}-${sto.kode}`} className="hover:bg-white/[0.02] transition-colors">
                                         <td className={tdBase}>{rowNumber}</td>
-                                        <td className={`${tdBase} text-left pl-10`}>{sto.kode}</td>
+                                        <td className={`${tdBase} text-left pl-10`}>{sto.kode === "OTHERS" ? "STO NULL" : sto.kode}</td>
                                         
                                         {hasIncData && getVisibleCategories("INC").map((c) => {
                                           const val = sto.counts.INC[c];

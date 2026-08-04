@@ -165,7 +165,7 @@ export default function StoragePage() {
 
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-muted/30 sm:pl-60">
       <NavBar />
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 space-y-4">
 
