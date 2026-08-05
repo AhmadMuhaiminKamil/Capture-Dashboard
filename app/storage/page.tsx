@@ -20,11 +20,15 @@ async function backupAll(names: string[], onProgress: (p: number) => void) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, { headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` } });
     const data = await r.json();
     if (Array.isArray(data) && data.length) {
-      const ws = XLSX.utils.json_to_sheet(data);
-      // auto column width
-      const cols = Object.keys(data[0]).map(k => ({ wch: Math.max(k.length, ...data.map((r: any) => String(r[k] ?? "").length)) + 2 }));
-      ws["!cols"] = cols;
-      ws["!freeze"] = { xSplit: 0, ySplit: 1 }; // freeze header row
+      // union of keys (row pertama bisa punya kolom null), flatten array/objek + buang newline
+      const keys = [...new Set(data.flatMap((r: any) => Object.keys(r)))];
+      const cell = (v: any) => v == null ? "" : Array.isArray(v) ? v.join(", ") : typeof v === "object" ? JSON.stringify(v) : String(v).replace(/\s*\n\s*/g, " ").trim();
+      const rows = data.map((r: any) => Object.fromEntries(keys.map(k => [k, cell(r[k])])));
+      const ws = XLSX.utils.json_to_sheet(rows, { header: keys });
+      // ponytail: lebar kolom clamp 8..40 — cukup rapi tanpa kolom raksasa; naikkan kalau ada kolom teks panjang yang wajib full
+      ws["!cols"] = keys.map(k => ({ wch: Math.min(40, Math.max(8, k.length + 2, ...rows.map(r => String(r[k]).length + 2))) }));
+      ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+      ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { c: 0, r: 0 }, e: { c: keys.length - 1, r: rows.length } }) };
       XLSX.utils.book_append_sheet(wb, ws, table.replace("_tickets", ""));
     }
   }
