@@ -4,8 +4,9 @@ import NavBar from "@/components/NavBar";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 import * as XLSX from "xlsx";
+import { supabase } from "@/lib/supabaseClient";
 
-const BACKUP_TABLES = ["binding_tickets","gno_tickets","ognok_tickets","routing_tickets"];
+const BACKUP_TABLES = ["binding_tickets","gno_tickets","ognok_tickets","routing_tickets","binding_submit_log","capture_ticket_messages","pending_photo_buffer","photo_batch_buffer"];
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
@@ -142,12 +143,68 @@ function StatCard({ label, value, glow, loading }: { label: string; value: strin
   );
 }
 
+function CleanupModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: (confirmation: string) => Promise<void> }) {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [phrase, setPhrase] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+  const valid = phrase === "HAPUS SEMUA";
+
+  const submit = async () => {
+    setDeleting(true); setError("");
+    try { await onConfirm(phrase); }
+    catch (err) { setError(err instanceof Error ? err.message : "Cleanup gagal"); setDeleting(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-destructive/30 bg-card shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-destructive to-transparent" />
+        <div className="p-6">
+          <div className="mb-5 flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10 text-destructive">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M4.93 19h14.14a2 2 0 001.73-3L13.73 4a2 2 0 00-3.46 0L3.2 16A2 2 0 004.93 19z" /></svg>
+            </div>
+            <div><p className="text-base font-semibold text-foreground">Cleanup Data</p><p className="mt-1 text-xs text-muted-foreground">Verifikasi {step} dari 2 · tindakan permanen.</p></div>
+          </div>
+
+          {step === 1 ? (
+            <>
+              <p className="text-sm text-foreground">Backup ZIP sudah selesai. Lanjutkan hanya jika Anda yakin ingin menghapus seluruh row di semua tabel dan seluruh foto secara permanen.</p>
+              <div className="mt-6 flex justify-end gap-2">
+                <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-xs text-muted-foreground hover:bg-accent">Batal</button>
+                <button onClick={() => setStep(2)} className="rounded-lg bg-destructive px-4 py-2 text-xs font-medium text-white hover:bg-destructive/90">Lanjut Verifikasi</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-center">
+                <p className="text-xs text-muted-foreground">Ketik kata ini di bawah</p>
+                <div className="mt-2 inline-flex rounded-lg border border-destructive/30 bg-background px-4 py-2 font-mono text-sm font-bold text-destructive">HAPUS SEMUA</div>
+              </div>
+              <input autoFocus value={phrase} onChange={e => setPhrase(e.target.value.toUpperCase())} placeholder="Ketik HAPUS SEMUA" className="mt-4 w-full rounded-xl border border-border bg-background px-4 py-3 text-center font-mono text-sm font-semibold uppercase text-foreground outline-none transition-all placeholder:font-sans placeholder:font-normal placeholder:normal-case placeholder:text-muted-foreground/50 focus:border-destructive/60 focus:ring-2 focus:ring-destructive/10" />
+              <p className="mt-2 text-center text-[11px] text-destructive/80">Aksi ini menghapus data dan foto secara permanen.</p>
+              {error && <p className="mt-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-center text-xs text-destructive">{error}</p>}
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                <button disabled={deleting} onClick={() => { setStep(1); setPhrase(""); }} className="rounded-xl border border-border bg-muted px-4 py-2.5 text-xs font-medium text-foreground shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-accent hover:shadow-md disabled:opacity-50">Kembali</button>
+                <button disabled={!valid || deleting} onClick={submit} className="rounded-xl bg-destructive px-4 py-2.5 text-xs font-semibold text-white shadow-sm shadow-destructive/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-destructive/90 hover:shadow-lg hover:shadow-destructive/25 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-40 disabled:shadow-none">{deleting ? "Menghapus..." : "Hapus Permanen"}</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function StoragePage() {
   const session = useAuthGuard();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [backing, setBacking] = useState(false);
   const [backupProgress, setBackupProgress] = useState(0);
+  const [backupCompleted, setBackupCompleted] = useState(false);
+  const [showCleanup, setShowCleanup] = useState(false);
 
   const load = () => { setLoading(true); fetch("/api/storage-stats").then(r => r.json()).then(d => { setStats(d); setLoading(false); }).catch(() => setLoading(false)); };
   useEffect(() => { if (session) { load(); const t = setInterval(load, 30000); return () => clearInterval(t); } }, [session]);
@@ -157,6 +214,16 @@ export default function StoragePage() {
   const bucketMBCount = useCount(stats ? stats.bucketBytes / 1024 ** 2 : 0);
   const rowsCount = useCount(stats?.totalRows ?? 0);
   const remainMBCount = useCount(stats ? (LIMIT - stats.dbBytes) / 1024 ** 2 : 0);
+
+  const cleanup = async (confirmation: string) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error("Session login tidak ditemukan");
+    const res = await fetch("/api/storage-cleanup", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ confirmation }) });
+    const body = await res.json();
+    if (!res.ok || !body.ok) throw new Error(body.error ?? "Cleanup gagal");
+    setShowCleanup(false); setBackupCompleted(false); load();
+  };
 
   if (!session) return null;
 
@@ -196,13 +263,21 @@ export default function StoragePage() {
             <StatCard label="Bucket" value={`${bucketMBCount.toFixed(1)} MB`} glow={glowOf(bp)} loading={loading && !stats} />
             <StatCard label="Total Rows" value={rowsCount.toLocaleString("id-ID")} loading={loading && !stats} />
             <StatCard label="Sisa Limit" value={`${remainMBCount.toFixed(1)} MB`} loading={loading && !stats} />
-            {/* Backup — single zip: database/ + images/ */}
+            {/* Backup + cleanup placeholder; cleanup intentionally has no handler */}
             <div className="col-span-2 flex flex-col items-center gap-2 pt-1">
-              <button disabled={backing} onClick={async () => { setBacking(true); setBackupProgress(0); try { await backupAll(stats?.bucketNames ?? [], setBackupProgress); } finally { setBacking(false); setBackupProgress(0); } }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-5 py-2 text-xs font-medium text-primary shadow-sm hover:bg-primary/20 disabled:opacity-50 transition-all">
-                <svg className={`h-3.5 w-3.5 ${backing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m0 12l-4-4m4 4l4-4M3 21h18"/></svg>
-                {backing ? `Backup... ${backupProgress}%` : "Backup"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button disabled={backing} onClick={async () => { setBacking(true); setBackupProgress(0); setBackupCompleted(false); try { await backupAll(stats?.bucketNames ?? [], setBackupProgress); setBackupCompleted(true); } finally { setBacking(false); setBackupProgress(0); } }}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-5 py-2 text-xs font-medium text-primary shadow-sm hover:bg-primary/20 disabled:opacity-50 transition-all">
+                  <svg className={`h-3.5 w-3.5 ${backing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3m0 12l-4-4m4 4l4-4M3 21h18"/></svg>
+                  {backing ? `Backup... ${backupProgress}%` : "Backup"}
+                </button>
+                <button disabled={!backupCompleted} onClick={() => setShowCleanup(true)}
+                  title={backupCompleted ? "Mulai cleanup" : "Selesaikan backup dahulu"}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-5 py-2 text-xs font-medium text-destructive shadow-sm transition-all hover:bg-destructive/20 disabled:cursor-not-allowed disabled:opacity-40">
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6"/></svg>
+                  Cleanup
+                </button>
+              </div>
               {backing && (
                 <div className="w-48 rounded-full bg-muted/60 h-1.5 overflow-hidden">
                   <div className="h-full rounded-full bg-primary transition-all duration-200" style={{ width: `${backupProgress}%` }}/>
@@ -220,10 +295,8 @@ export default function StoragePage() {
             {dbPct >= 90 ? "⛔ KRITIS" : dbPct >= 80 ? "⚠ PERINGATAN" : "⚠ PERHATIAN"} — Database {fmtPct(dbPct)} dari limit.
           </div>
         )}
-
-
-
       </div>
+      {showCleanup && <CleanupModal onClose={() => setShowCleanup(false)} onConfirm={cleanup} />}
     </div>
   );
 }
