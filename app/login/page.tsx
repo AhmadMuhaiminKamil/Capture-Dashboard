@@ -14,6 +14,32 @@ export default function LoginPage() {
   const [checking, setChecking] = useState(true);
   const [focusedField, setFocusedField] = useState<"username" | "password" | null>(null);
 
+  // Client lockout state (cooldown setelah salah password berulang)
+  const [lockoutSec, setLockoutSec] = useState(0);
+
+  useEffect(() => {
+    // Cek apakah ada lockout aktif yang tersimpan
+    const until = parseInt(sessionStorage.getItem("login_lockout_until") || "0", 10);
+    const now = Math.floor(Date.now() / 1000);
+    if (until > now) {
+      setLockoutSec(until - now);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (lockoutSec <= 0) return;
+    const timer = setInterval(() => {
+      setLockoutSec(prev => {
+        if (prev <= 1) {
+          sessionStorage.removeItem("login_lockout_until");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lockoutSec]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) router.replace("/dashboard");
@@ -23,15 +49,50 @@ export default function LoginPage() {
 
   if (checking) return null;
 
+  const triggerLockout = (seconds: number) => {
+    const until = Math.floor(Date.now() / 1000) + seconds;
+    sessionStorage.setItem("login_lockout_until", until.toString());
+    setLockoutSec(seconds);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (lockoutSec > 0) return;
+
     setError("");
     if (!username || !password) { setError("Username dan password harus diisi"); return; }
     setLoading(true);
     const { error: err } = await supabase.auth.signInWithPassword({ email: toEmail(username), password });
     setLoading(false);
-    if (err) setError("Username atau password salah");
-    else router.replace("/dashboard");
+
+    if (err) {
+      // Deteksi error 429 / rate limit dari Supabase
+      const isRateLimited =
+        err.status === 429 ||
+        err.message?.toLowerCase().includes("too many requests") ||
+        err.message?.toLowerCase().includes("rate limit") ||
+        (err as any)?.code === "over_request_rate_limit";
+
+      if (isRateLimited) {
+        triggerLockout(60); // Pasang cooldown 60 detik
+        setError("Terlalu banyak percobaan login. Server membatasi akses dari IP Anda. Silakan tunggu 60 detik.");
+      } else {
+        // Catat kegagalan berturut-turut untuk proteksi lokal
+        const attempts = parseInt(sessionStorage.getItem("failed_login_attempts") || "0", 10) + 1;
+        if (attempts >= 5) {
+          sessionStorage.removeItem("failed_login_attempts");
+          triggerLockout(30); // Lockout 30 detik jika salah 5 kali
+          setError("Terlalu banyak percobaan salah (5x). Tombol dikunci sementara selama 30 detik.");
+        } else {
+          sessionStorage.setItem("failed_login_attempts", attempts.toString());
+          setError(`Username atau password salah (Percobaan ${attempts}/5)`);
+        }
+      }
+    } else {
+      sessionStorage.removeItem("failed_login_attempts");
+      sessionStorage.removeItem("login_lockout_until");
+      router.replace("/dashboard");
+    }
   };
 
   return (
@@ -153,9 +214,13 @@ export default function LoginPage() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || lockoutSec > 0}
             className="group relative w-full overflow-hidden rounded-xl py-3.5 text-sm font-semibold text-white transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed"
-            style={{ background: "linear-gradient(135deg, #2563eb, #4f46e5)" }}
+            style={{
+              background: lockoutSec > 0
+                ? "rgba(71,85,105,0.8)"
+                : "linear-gradient(135deg, #2563eb, #4f46e5)"
+            }}
           >
             <span className="relative z-10 flex items-center justify-center gap-2">
               {loading ? (
@@ -165,6 +230,13 @@ export default function LoginPage() {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
                   </svg>
                   Memproses...
+                </>
+              ) : lockoutSec > 0 ? (
+                <>
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  Terkunci ({lockoutSec}s)
                 </>
               ) : (
                 <>
@@ -176,7 +248,9 @@ export default function LoginPage() {
               )}
             </span>
             {/* Shimmer */}
-            <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+            {lockoutSec === 0 && (
+              <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+            )}
           </button>
         </form>
 
